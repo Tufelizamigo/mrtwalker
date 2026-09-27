@@ -2,7 +2,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
-:root{color-scheme:dark;--bg:#1a1a2e;--panel:#22223a;--line:#2e2e4d;--ink:#e8ecf6;--mute:#8a8fb0;--acc:#00d4ff;
+:root{color-scheme:dark;--been:#ffb300;--bg:#1a1a2e;--panel:#22223a;--line:#2e2e4d;--ink:#e8ecf6;--mute:#8a8fb0;--acc:#00d4ff;
   --sans:Outfit,system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);display:flex;flex-direction:column}
@@ -28,14 +28,14 @@ svg.drag{cursor:grabbing}
 .dim .seg.hl{opacity:1}
 .stn{fill:#fff;stroke:#2b2b3a;cursor:pointer}
 .stn.x{fill:#fff;stroke:#1a1a2e}
-svg:not(.v-walk) .stn.been{fill:#ffb300;stroke:#1a1a2e;stroke-width:3px;r:9px;filter:drop-shadow(0 0 5px #ff9d00)}
+svg:not(.v-walk) .stn.been{fill:var(--been);stroke:#1a1a2e;stroke-width:3px;r:9px;filter:drop-shadow(0 0 5px var(--been))}
 svg.v-been .seg.on{stroke-opacity:.28;filter:none;stroke-width:7px}
 .stn.pick{fill:#00d4ff;stroke:#1a1a2e;stroke-width:4}
 #mode{position:absolute;left:12px;top:12px;z-index:1;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
 #mode button{border:0;padding:6px 12px;border-radius:7px;background:none;font-size:13px;font-weight:600}
 #mode button.act{background:var(--acc);color:#0b1020}
-#mode button#mBeen.act{background:#ffc53d}
-#mode button#mBoth.act{background:linear-gradient(90deg,var(--acc),#ffc53d)}
+#mode button#mBeen.act{background:var(--been)}
+#mode button#mBoth.act{background:linear-gradient(90deg,var(--acc),var(--been))}
 .lbl{fill:#2b2b3a;font-family:var(--sans);font-weight:600;pointer-events:none;paint-order:stroke;stroke:#fbfcfd;stroke-linejoin:round}
 .lbl.x{font-weight:800;fill:#1a1a2e}
 #info{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(34,34,58,.94);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -60,6 +60,10 @@ aside h2{margin:0 0 10px;font-size:11px;letter-spacing:.1em;text-transform:upper
 .route select{padding:7px;width:100%}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 textarea{width:100%;height:70px;padding:8px;font-family:var(--mono);font-size:11px;box-sizing:border-box}
+.sw{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sw button{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid var(--line)}
+.sw button.act{border-color:var(--ink);box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}
+.sw input[type=color]{width:44px;height:32px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer}
 .note{font-size:12px;color:var(--mute);line-height:1.5;margin:0}
 @media (max-width:760px){main{grid-template-columns:1fr;grid-template-rows:70vh auto}#info{font-size:12px;padding:6px 10px;left:8px;right:8px;bottom:8px}#info .code{font-size:10px}aside{border-left:0;border-top:1px solid var(--line);overflow:visible}body{height:auto}}
 body.clean header,body.clean aside,body.clean #info,body.clean .zb .z{display:none}
@@ -77,7 +81,7 @@ svg.only.v-been .seg.on,svg.only.v-been .stn.w:not(.been),svg.only.names.v-been 
     <div class="stat"><small>Walked</small><span class="a" id="sKm">0.0 km</span></div>
     <div class="stat"><small>Segments</small><span id="sSeg">0/0</span></div>
     <div class="stat"><small>Network</small><span id="sPct">0%</span></div>
-    <div class="stat"><small>Been to</small><span id="sBeen" style="color:#ffc53d">0/0</span></div>
+    <div class="stat"><small>Been to</small><span id="sBeen" style="color:var(--been)">0/0</span></div>
   </div>
 </header>
 <main>
@@ -89,6 +93,10 @@ svg.only.v-been .seg.on,svg.only.v-been .stn.w:not(.been),svg.only.names.v-been 
   </div>
   <aside>
     <section><h2>Lines</h2><div id="lines"></div></section>
+    <section><h2>Been there colour</h2>
+      <div class="sw" id="sw"></div>
+      <div class="row" style="margin-top:10px;align-items:center"><label for="cPick" class="note">Custom</label><input type="color" id="cPick" value="#ffb300"><button id="cDef">Default colour</button></div>
+    </section>
     <section class="route"><h2>Mark a whole walk</h2>
       <select id="rLine" aria-label="Line"></select>
       <select id="rFrom" aria-label="From station"></select>
@@ -145,9 +153,9 @@ function showStation(n,cs){
 const lineOf=c=>{const p=c.replace(/\d+/,"");return {CE:"CC",CG:"EW"}[p]||p};
 let pick=null;
 function pickStation(n,cs,dot){
-  if(mode==="both"){showStation(n,cs);$("info").innerHTML+=` · ${been.has(n)?'<b style="color:#ffc53d">been there</b>':"not been"} · switch to Walk or Been there to edit`;return}
+  if(mode==="both"){showStation(n,cs);$("info").innerHTML+=` · ${been.has(n)?'<b style="color:var(--been)">been there</b>':"not been"} · switch to Walk or Been there to edit`;return}
   if(mode==="been"){const on=!been.has(n);on?been.add(n):been.delete(n);save();render();
-    $("info").innerHTML=`${cs.map(pill).join("")} <b>${n}</b> · <b style="color:${on?"#ffc53d":"var(--mute)"}">${on?"been there":"removed"}</b>`;return}
+    $("info").innerHTML=`${cs.map(pill).join("")} <b>${n}</b> · <b style="color:${on?"var(--been)":"var(--mute)"}">${on?"been there":"removed"}</b>`;return}
   if(!pick||pick.n===n){pick?.dot.classList.remove("pick");pick=pick?.n===n?null:{n,cs,dot};if(pick){dot.classList.add("pick");showStation(n,cs);$("info").innerHTML+=` · <b style="color:var(--acc)">now tap another station on the same line</b>`}else $("info").textContent="Cancelled.";return}
   let best=null;
   for(const a of pick.cs)for(const b of cs)if(lineOf(a)===lineOf(b)){const ks=path(lineOf(a),a,b);if(ks.length&&(!best||ks.length<best.ks.length))best={a,b,ks}}
@@ -223,6 +231,14 @@ const setMode=m=>{mode=m;for(const [id,v] of [["mWalk","walk"],["mBeen","been"],
   svg.classList.remove("v-walk","v-been","v-both");svg.classList.add("v-"+m);pick?.dot.classList.remove("pick");pick=null;
   $("info").textContent={been:"Been there map: tap any station you've been to. Tap again to remove it.",walk:"Walk map: tap a station, then another on the same line, to mark the walk between them.",both:"Both: your walks and the stations you've been to together. View only."}[m]};
 $("mWalk").onclick=()=>setMode("walk");$("mBeen").onclick=()=>setMode("been");$("mBoth").onclick=()=>setMode("both");
+// Been there colour: presets, custom picker, default
+const DEF="#ffb300",PRE=[DEF,"#ff3b6b","#ff6a00","#22c55e","#00b4d8","#7c3aed","#ec4899","#1a1a2e"];
+function setBeen(c,keep=true){document.documentElement.style.setProperty("--been",c);$("cPick").value=c;
+  document.querySelectorAll("#sw button").forEach(b=>b.classList.toggle("act",b.dataset.c===c));if(keep)try{localStorage.setItem(KEY+".color",c)}catch(e){}}
+$("sw").innerHTML=PRE.map(c=>`<button data-c="${c}" style="background:${c}" aria-label="Colour ${c}${c===DEF?" (default)":""}"></button>`).join("");
+$("sw").onclick=e=>{const c=e.target.dataset?.c;if(c)setBeen(c)};
+$("cPick").oninput=e=>setBeen(e.target.value);$("cDef").onclick=()=>setBeen(DEF);
+try{setBeen(localStorage.getItem(KEY+".color")||DEF,false)}catch(e){setBeen(DEF,false)}
 $("zIn").onclick=()=>zoom(1/1.4);$("zOut").onclick=()=>zoom(1.4);$("zFit").onclick=fit;
 addEventListener("resize",fit);
 render();fit();
