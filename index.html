@@ -28,12 +28,14 @@ svg.drag{cursor:grabbing}
 .dim .seg.hl{opacity:1}
 .stn{fill:#fff;stroke:#2b2b3a;cursor:pointer}
 .stn.x{fill:#fff;stroke:#1a1a2e}
-.stn.been{fill:#ffc53d;stroke:#1a1a2e}
+svg:not(.v-walk) .stn.been{fill:#ffc53d;stroke:#1a1a2e}
+svg.v-been .seg.on{stroke-opacity:.28;filter:none;stroke-width:7px}
 .stn.pick{fill:#00d4ff;stroke:#1a1a2e;stroke-width:4}
 #mode{position:absolute;left:12px;top:12px;z-index:1;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
 #mode button{border:0;padding:6px 12px;border-radius:7px;background:none;font-size:13px;font-weight:600}
 #mode button.act{background:var(--acc);color:#0b1020}
 #mode button#mBeen.act{background:#ffc53d}
+#mode button#mBoth.act{background:linear-gradient(90deg,var(--acc),#ffc53d)}
 .lbl{fill:#2b2b3a;font-family:var(--sans);font-weight:600;pointer-events:none;paint-order:stroke;stroke:#fbfcfd;stroke-linejoin:round}
 .lbl.x{font-weight:800;fill:#1a1a2e}
 #info{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(34,34,58,.94);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -64,7 +66,8 @@ body.clean header,body.clean aside,body.clean #info,body.clean .zb .z{display:no
 body.clean main{grid-template-columns:1fr;grid-template-rows:1fr}
 body.clean{height:100%}
 svg.only .seg.off,svg.only .hit,svg.only .stn,svg.only .lbl{display:none}
-svg.only.names .lbl.w,svg.only.names .stn.w,svg.only.names .lbl.been,svg.only .stn.been{display:block}
+svg.only.names .lbl.w,svg.only.names .stn.w,svg.only.names:not(.v-walk) .lbl.been,svg.only:not(.v-walk) .stn.been{display:block}
+svg.only.v-been .seg.on,svg.only.v-been .stn.w:not(.been),svg.only.names.v-been .lbl.w:not(.been){display:none}
 @media (prefers-reduced-motion:reduce){.seg{transition:none}}
 </style></head><body>
 
@@ -79,8 +82,8 @@ svg.only.names .lbl.w,svg.only.names .stn.w,svg.only.names .lbl.been,svg.only .s
 </header>
 <main>
   <div id="mapWrap">
-    <div id="mode" role="group" aria-label="Tap mode"><button id="mWalk" class="act">Walk</button><button id="mBeen">Been there</button></div>
-    <svg id="map"><g id="vp"><rect id="land" x="120" y="330" width="1470" height="990" rx="60"></rect><g id="gSeg"></g><g id="gStn"></g><g id="gLbl"></g></g></svg>
+    <div id="mode" role="group" aria-label="Tap mode"><button id="mWalk" class="act">Walk</button><button id="mBeen">Been there</button><button id="mBoth">Both</button></div>
+    <svg id="map" class="v-walk"><g id="vp"><rect id="land" x="120" y="330" width="1470" height="990" rx="60"></rect><g id="gSeg"></g><g id="gStn"></g><g id="gLbl"></g></g></svg>
     <div class="zb" style="z-index:1"><button id="zUi" aria-label="Hide or show controls" title="Hide/show controls">◐</button><button id="zGlow" aria-label="Show only walked lines" title="Walked lines only">✦</button><button id="zNames" aria-label="Show names of walked stations" title="Walked lines + names">Aa</button><button class="z" id="zIn" aria-label="Zoom in">+</button><button class="z" id="zOut" aria-label="Zoom out">−</button><button class="z" id="zFit" aria-label="Fit map">⤢</button></div>
     <div id="info">Tap a station, then another on the same line, to mark the walk between them. Do it again to undo.</div>
   </div>
@@ -142,6 +145,7 @@ function showStation(n,cs){
 const lineOf=c=>{const p=c.replace(/\d+/,"");return {CE:"CC",CG:"EW"}[p]||p};
 let pick=null;
 function pickStation(n,cs,dot){
+  if(mode==="both"){showStation(n,cs);$("info").innerHTML+=` · ${been.has(n)?'<b style="color:#ffc53d">been there</b>':"not been"} · switch to Walk or Been there to edit`;return}
   if(mode==="been"){const on=!been.has(n);on?been.add(n):been.delete(n);save();render();
     $("info").innerHTML=`${cs.map(pill).join("")} <b>${n}</b> · <b style="color:${on?"#ffc53d":"var(--mute)"}">${on?"been there":"removed"}</b>`;return}
   if(!pick||pick.n===n){pick?.dot.classList.remove("pick");pick=pick?.n===n?null:{n,cs,dot};if(pick){dot.classList.add("pick");showStation(n,cs);$("info").innerHTML+=` · <b style="color:var(--acc)">now tap another station on the same line</b>`}else $("info").textContent="Cancelled.";return}
@@ -215,9 +219,10 @@ $("zUi").onclick=()=>{document.body.classList.toggle("clean");fit()};
 const glowUI=()=>{$("zGlow").style.borderColor=svg.classList.contains("only")&&!svg.classList.contains("names")?"var(--acc)":"";$("zNames").style.borderColor=svg.classList.contains("names")?"var(--acc)":""};
 $("zGlow").onclick=()=>{const on=!(svg.classList.contains("only")&&!svg.classList.contains("names"));svg.classList.toggle("only",on);svg.classList.remove("names");glowUI()};
 $("zNames").onclick=()=>{const on=!svg.classList.contains("names");svg.classList.toggle("names",on);svg.classList.toggle("only",on);glowUI()};
-const setMode=m=>{mode=m;$("mWalk").classList.toggle("act",m==="walk");$("mBeen").classList.toggle("act",m==="been");pick?.dot.classList.remove("pick");pick=null;
-  $("info").textContent=m==="been"?"Tap any station you've been to. Tap again to remove it.":"Tap a station, then another on the same line, to mark the walk between them."};
-$("mWalk").onclick=()=>setMode("walk");$("mBeen").onclick=()=>setMode("been");
+const setMode=m=>{mode=m;for(const [id,v] of [["mWalk","walk"],["mBeen","been"],["mBoth","both"]])$(id).classList.toggle("act",m===v);
+  svg.classList.remove("v-walk","v-been","v-both");svg.classList.add("v-"+m);pick?.dot.classList.remove("pick");pick=null;
+  $("info").textContent={been:"Been there map: tap any station you've been to. Tap again to remove it.",walk:"Walk map: tap a station, then another on the same line, to mark the walk between them.",both:"Both: your walks and the stations you've been to together. View only."}[m]};
+$("mWalk").onclick=()=>setMode("walk");$("mBeen").onclick=()=>setMode("been");$("mBoth").onclick=()=>setMode("both");
 $("zIn").onclick=()=>zoom(1/1.4);$("zOut").onclick=()=>zoom(1.4);$("zFit").onclick=fit;
 addEventListener("resize",fit);
 render();fit();
