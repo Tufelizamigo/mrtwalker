@@ -18,6 +18,7 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 320px}
 #land{fill:#fbfcfd}
 svg{width:100%;height:100%;display:block;cursor:grab}
 svg.drag{cursor:grabbing}
+.notr,.notr *{transition:none!important}
 .seg{stroke-linecap:round;fill:none;transition:stroke-opacity .2s,stroke-width .2s}
 .seg.off{stroke-opacity:.28}
 .seg.on{stroke-opacity:1;filter:drop-shadow(0 0 3px currentColor)}
@@ -103,6 +104,7 @@ svg.only.v-been .seg.on,svg.only.v-been .stn.w:not(.been),svg.only.names.v-been 
       <select id="rTo" aria-label="To station"></select>
       <div class="row"><button class="pri" id="rOn">Mark walked</button><button id="rOff">Unmark</button></div>
     </section>
+    <section><h2>Export</h2><button class="pri" id="bPdf" style="width:100%">Export PDF of everything</button></section>
     <section><h2>Backup</h2>
       <p class="note">Progress saves in this browser. Copy the code to keep it safe or move it to another device.</p>
       <textarea id="bk" aria-label="Backup code" spellcheck="false"></textarea>
@@ -112,6 +114,7 @@ svg.only.v-been .seg.on,svg.only.v-been .stn.w:not(.been),svg.only.names.v-been 
   </aside>
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 const PFX={CE:"CC",CG:"EW",SE:"STC",SW:"STC",PE:"PTC",PW:"PTC"},LRT=new Set(["BP","STC","PTC","SX"]);
 function lineOf(c){const p=c.replace(/\d+/,"");return PFX[p]||p}
@@ -243,5 +246,56 @@ try{setBeen(localStorage.getItem(KEY+".color")||DEF,false)}catch(e){setBeen(DEF,
 $("zIn").onclick=()=>zoom(1/1.4);$("zOut").onclick=()=>zoom(1.4);$("zFit").onclick=fit;
 addEventListener("resize",fit);
 render();fit();
+// ---- PDF export: summary, per-line table, 3 maps, full lists ----
+const PROPS=["display","fill","fill-opacity","stroke","stroke-width","stroke-opacity","stroke-dasharray","stroke-linecap","stroke-linejoin","opacity","filter","font-family","font-size","font-weight","paint-order","r"];
+function mapPNG(view){
+  const old=svg.getAttribute("class"),dim=$("gSeg").classList.contains("dim");
+  svg.setAttribute("class","notr v-"+view);$("gSeg").classList.remove("dim");
+  const b=$("gLbl").getBBox(),p=30,vb=[b.x-p,b.y-p,b.width+2*p,b.height+2*p],cl=svg.cloneNode(true),src=svg.querySelectorAll("*"),dst=cl.querySelectorAll("*");
+  src.forEach((e,i)=>{const cs=getComputedStyle(e);dst[i].setAttribute("style",PROPS.map(k=>`${k}:${cs.getPropertyValue(k)}`).join(";"));if(e.classList.contains("hit"))dst[i].remove()});
+  svg.setAttribute("class",old);if(dim)$("gSeg").classList.add("dim");
+  const W=2400,H=Math.round(W*vb[3]/vb[2]);
+  cl.setAttribute("viewBox",vb.join(" "));cl.setAttribute("width",W);cl.setAttribute("height",H);cl.setAttribute("xmlns",NS);cl.removeAttribute("class");
+  return new Promise((ok,no)=>{const img=new Image();img.onload=()=>{const c=document.createElement("canvas");c.width=W;c.height=H;const x=c.getContext("2d");x.fillStyle="#dbe9ef";x.fillRect(0,0,W,H);x.drawImage(img,0,0,W,H);ok({url:c.toDataURL("image/jpeg",.92),r:H/W})};img.onerror=no;
+    img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(new XMLSerializer().serializeToString(cl))})}
+const hex=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+async function exportPDF(){
+  if(!window.jspdf){$("info").textContent="PDF tool didn't load. Check your connection and try again.";return}
+  $("info").textContent="Building PDF…";
+  const {jsPDF}=window.jspdf,d=new jsPDF({orientation:"landscape",unit:"mm",format:"a4"}),PW=297,PH=210,M=14;
+  const beenC=getComputedStyle(document.documentElement).getPropertyValue("--been").trim()||"#ffb300";
+  let km=0,tot=0;const per={};for(const L in LINES)per[L]={n:0,d:0,km:0,tot:0};
+  for(const [k,s] of Object.entries(segs)){per[s.L].n++;per[s.L].tot+=s.km;tot+=s.km;if(walked.has(k)){per[s.L].d++;per[s.L].km+=s.km;km+=s.km}}
+  const head=(t,sub)=>{d.setFillColor(26,26,46);d.rect(0,0,PW,20,"F");d.setTextColor(255);d.setFont("helvetica","bold");d.setFontSize(15);d.text("MRT Walker",M,13);
+    d.setTextColor(0,212,255);d.text(t,M+36,13);d.setTextColor(170);d.setFont("helvetica","normal");d.setFontSize(9);d.text(sub||new Date().toLocaleString(),PW-M,13,{align:"right"});d.setTextColor(30)};
+  // page 1: summary
+  head("Summary");
+  const tiles=[["Walked",km.toFixed(1)+" km"],["Stretches",`${walked.size} / ${Object.keys(segs).length}`],["Network",Math.round(km/tot*100)+"%"],["Been to",`${been.size} / ${Object.keys(stnEl).length}`]];
+  tiles.forEach(([a,b],i)=>{const x=M+i*67;d.setDrawColor(210);d.roundedRect(x,28,62,26,3,3);d.setFontSize(8);d.setTextColor(120);d.text(a.toUpperCase(),x+5,36);d.setFontSize(18);d.setFont("helvetica","bold");
+    d.setTextColor(...(i===3?hex(beenC):i===0?[0,150,190]:[30,30,30]));d.text(b,x+5,48);d.setFont("helvetica","normal")});
+  let y=66;d.setFontSize(9);d.setTextColor(120);["LINE","STRETCHES","WALKED","LINE LENGTH","PROGRESS"].forEach((t,i)=>d.text(t,[M,M+80,M+115,M+145,M+180][i],y));y+=3;
+  for(const [L,l] of Object.entries(LINES)){const p=per[L];y+=9;d.setFillColor(...hex(l.color));d.roundedRect(M,y-4.5,10,6,1,1,"F");d.setTextColor(255);d.setFontSize(7);d.setFont("helvetica","bold");d.text(L,M+5,y-0.3,{align:"center"});
+    d.setFont("helvetica","normal");d.setFontSize(10);d.setTextColor(30);d.text(l.name,M+13,y);d.text(`${p.d} / ${p.n}`,M+80,y);d.text(p.km.toFixed(2)+" km",M+115,y);d.text(p.tot.toFixed(2)+" km",M+145,y);
+    d.setFillColor(230);d.rect(M+180,y-3,80,3.5,"F");d.setFillColor(...hex(l.color));if(p.d)d.rect(M+180,y-3,80*p.d/p.n,3.5,"F");d.setTextColor(120);d.text(Math.round(p.d/p.n*100)+"%",M+263,y)}
+  d.setFontSize(8);d.setTextColor(140);d.text("Distances are straight lines between stations. Layout follows the LTA system map.",M,PH-8);
+  // pages 2-4: maps
+  for(const [v,t] of [["walk","Walk map"],["been","Been there map"],["both","Both"]]){
+    const im=await mapPNG(v);d.addPage();head(t);const aw=PW-2*M,ah=PH-30;let w=aw,h=w*im.r;if(h>ah){h=ah;w=h/im.r}
+    d.addImage(im.url,"JPEG",(PW-w)/2,25,w,h)}
+  // lists
+  const list=(title,rows)=>{d.addPage();head(title);let x=M,y=30;const colW=(PW-2*M)/3;d.setFontSize(9);
+    if(!rows.length){d.setTextColor(120);d.text("Nothing yet.",M,y);return}
+    for(const r of rows){if(r.h){if(y>PH-20){x+=colW;y=30;if(x>PW-colW){d.addPage();head(title+" (cont.)");x=M}}y+=2;d.setFont("helvetica","bold");d.setTextColor(...hex(r.c));d.text(r.h,x,y);d.setFont("helvetica","normal");y+=5;continue}
+      if(y>PH-12){x+=colW;y=30;if(x>PW-colW){d.addPage();head(title+" (cont.)");x=M}}d.setTextColor(40);d.text(r.t,x,y);if(r.k){d.setTextColor(130);d.text(r.k,x+colW-6,y,{align:"right"})}y+=4.6}};
+  const wr=[];for(const [L,l] of Object.entries(LINES)){const ks=Object.keys(segs).filter(k=>segs[k].L===L&&walked.has(k));if(!ks.length)continue;wr.push({h:`${l.name} · ${per[L].km.toFixed(2)} km`,c:l.color});
+    ks.forEach(k=>{const s=segs[k];wr.push({t:`${s.a} ${nm(s.a)} - ${s.b} ${nm(s.b)}`,k:s.km.toFixed(2)+" km"})})}
+  list("Walked stretches",wr);
+  const br=[];for(const [L,l] of Object.entries(LINES)){const ns=lineStops(L).map(c=>[c,nm(c)]).filter(([c,n])=>been.has(n));if(!ns.length)continue;br.push({h:`${l.name} · ${ns.length}`,c:l.color});ns.forEach(([c,n])=>br.push({t:`${c}  ${n}`}))}
+  list("Stations been to",br);
+  d.save(`mrt-walker-${new Date().toISOString().slice(0,10)}.pdf`);
+  $("info").textContent="PDF saved. (Inside the Claude app downloads are blocked; use mrtwalker.xyz to download.)";
+}
+$("bPdf").onclick=()=>exportPDF().catch(e=>$("info").textContent="Couldn't build the PDF: "+e.message);
+
 </script>
 </body></html>
