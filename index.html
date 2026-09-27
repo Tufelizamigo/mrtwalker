@@ -268,30 +268,41 @@ async function exportPDF(){
   for(const [k,s] of Object.entries(segs)){per[s.L].n++;per[s.L].tot+=s.km;tot+=s.km;if(walked.has(k)){per[s.L].d++;per[s.L].km+=s.km;km+=s.km}}
   const head=(t,sub)=>{d.setFillColor(26,26,46);d.rect(0,0,PW,20,"F");d.setTextColor(255);d.setFont("helvetica","bold");d.setFontSize(15);d.text("MRT Walker",M,13);
     d.setTextColor(0,212,255);d.text(t,M+36,13);d.setTextColor(170);d.setFont("helvetica","normal");d.setFontSize(9);d.text(sub||new Date().toLocaleString(),PW-M,13,{align:"right"});d.setTextColor(30)};
-  // page 1: summary
-  head("Summary");
-  const tiles=[["Walked",km.toFixed(1)+" km"],["Stretches",`${walked.size} / ${Object.keys(segs).length}`],["Network",Math.round(km/tot*100)+"%"],["Been to",`${been.size} / ${Object.keys(stnEl).length}`]];
-  tiles.forEach(([a,b],i)=>{const x=M+i*67;d.setDrawColor(210);d.roundedRect(x,28,62,26,3,3);d.setFontSize(8);d.setTextColor(120);d.text(a.toUpperCase(),x+5,36);d.setFontSize(18);d.setFont("helvetica","bold");
-    d.setTextColor(...(i===3?hex(beenC):i===0?[0,150,190]:[30,30,30]));d.text(b,x+5,48);d.setFont("helvetica","normal")});
-  let y=66;d.setFontSize(9);d.setTextColor(120);["LINE","STRETCHES","WALKED","LINE LENGTH","PROGRESS"].forEach((t,i)=>d.text(t,[M,M+80,M+115,M+145,M+180][i],y));y+=3;
-  for(const [L,l] of Object.entries(LINES)){const p=per[L];y+=9;d.setFillColor(...hex(l.color));d.roundedRect(M,y-4.5,10,6,1,1,"F");d.setTextColor(255);d.setFontSize(7);d.setFont("helvetica","bold");d.text(L,M+5,y-0.3,{align:"center"});
-    d.setFont("helvetica","normal");d.setFontSize(10);d.setTextColor(30);d.text(l.name,M+13,y);d.text(`${p.d} / ${p.n}`,M+80,y);d.text(p.km.toFixed(2)+" km",M+115,y);d.text(p.tot.toFixed(2)+" km",M+145,y);
-    d.setFillColor(230);d.rect(M+180,y-3,80,3.5,"F");d.setFillColor(...hex(l.color));if(p.d)d.rect(M+180,y-3,80*p.d/p.n,3.5,"F");d.setTextColor(120);d.text(Math.round(p.d/p.n*100)+"%",M+263,y)}
-  d.setFontSize(8);d.setTextColor(140);d.text("Distances are straight lines between stations. Layout follows the LTA system map.",M,PH-8);
-  // pages 2-4: maps
-  for(const [v,t] of [["walk","Walk map"],["been","Been there map"],["both","Both"]]){
-    const im=await mapPNG(v);d.addPage();head(t);const aw=PW-2*M,ah=PH-30;let w=aw,h=w*im.r;if(h>ah){h=ah;w=h/im.r}
-    d.addImage(im.url,"JPEG",(PW-w)/2,25,w,h)}
-  // lists
+  // summary page: 4 tiles + per-line table with progress bars
+  const summary=(title,tiles,cols,rows,note)=>{head(title);
+    tiles.forEach(([a,b,c],i)=>{const x=M+i*67;d.setDrawColor(210);d.roundedRect(x,28,62,26,3,3);d.setFontSize(8);d.setTextColor(120);d.text(a.toUpperCase(),x+5,36);d.setFontSize(18);d.setFont("helvetica","bold");
+      d.setTextColor(...(c||[30,30,30]));d.text(b,x+5,48);d.setFont("helvetica","normal")});
+    let y=66;d.setFontSize(9);d.setTextColor(120);["LINE",...cols,"PROGRESS"].forEach((t,i)=>d.text(t,[M,M+80,M+115,M+145,M+180][i],y));y+=3;
+    for(const [L,vals,f] of rows){const l=LINES[L];y+=9;d.setFillColor(...hex(l.color));d.roundedRect(M,y-4.5,10,6,1,1,"F");d.setTextColor(255);d.setFontSize(L.length>2?6:7);d.setFont("helvetica","bold");d.text(L,M+5,y-0.3,{align:"center"});
+      d.setFont("helvetica","normal");d.setFontSize(10);d.setTextColor(30);d.text(l.name,M+13,y);vals.forEach((v,i)=>d.text(v,[M+80,M+115,M+145][i],y));
+      d.setFillColor(230);d.rect(M+180,y-3,80,3.5,"F");d.setFillColor(...hex(l.color));if(f)d.rect(M+180,y-3,80*f,3.5,"F");d.setTextColor(120);d.text(Math.round(f*100)+"%",M+263,y)}
+    d.setFontSize(8);d.setTextColor(140);d.text(note,M,PH-8)};
+  const mapPage=async(v,t)=>{const im=await mapPNG(v);d.addPage();head(t);const aw=PW-2*M,ah=PH-30;let w=aw,h=w*im.r;if(h>ah){h=ah;w=h/im.r}d.addImage(im.url,"JPEG",(PW-w)/2,25,w,h)};
   const list=(title,rows)=>{d.addPage();head(title);let x=M,y=30;const colW=(PW-2*M)/3;d.setFontSize(9);
     if(!rows.length){d.setTextColor(120);d.text("Nothing yet.",M,y);return}
     for(const r of rows){if(r.h){if(y>PH-20){x+=colW;y=30;if(x>PW-colW){d.addPage();head(title+" (cont.)");x=M}}y+=2;d.setFont("helvetica","bold");d.setTextColor(...hex(r.c));d.text(r.h,x,y);d.setFont("helvetica","normal");y+=5;continue}
       if(y>PH-12){x+=colW;y=30;if(x>PW-colW){d.addPage();head(title+" (cont.)");x=M}}d.setTextColor(40);d.text(r.t,x,y);if(r.k){d.setTextColor(130);d.text(r.k,x+colW-6,y,{align:"right"})}y+=4.6}};
+  // --- WALK section ---
+  const Ls=Object.keys(LINES),started=Ls.filter(L=>per[L].d).length;
+  summary("Walk summary",[["Walked",km.toFixed(1)+" km",[0,150,190]],["Stretches",`${walked.size} / ${Object.keys(segs).length}`],["Network",Math.round(km/tot*100)+"%"],["Lines started",`${started} / ${Ls.length}`]],
+    ["STRETCHES","WALKED","LINE LENGTH"],Ls.map(L=>{const p=per[L];return [L,[`${p.d} / ${p.n}`,p.km.toFixed(2)+" km",p.tot.toFixed(2)+" km"],p.d/p.n]}),
+    "Distances are straight lines between stations. Layout follows the LTA system map.");
+  await mapPage("walk","Walk map");
   const wr=[];for(const [L,l] of Object.entries(LINES)){const ks=Object.keys(segs).filter(k=>segs[k].L===L&&walked.has(k));if(!ks.length)continue;wr.push({h:`${l.name} · ${per[L].km.toFixed(2)} km`,c:l.color});
     ks.forEach(k=>{const s=segs[k];wr.push({t:`${s.a} ${nm(s.a)} - ${s.b} ${nm(s.b)}`,k:s.km.toFixed(2)+" km"})})}
   list("Walked stretches",wr);
+  // --- BEEN THERE section ---
+  const allN=Object.keys(stnEl).length,xN=Object.keys(byName).filter(n=>new Set(byName[n].map(lineOf)).size>1),bs={};
+  for(const L of Ls){const ns=[...new Set(lineStops(L).map(nm))];bs[L]={t:ns.length,b:ns.filter(n=>been.has(n)).length}}
+  d.addPage();
+  summary("Been there summary",[["Been to",`${been.size} / ${allN}`,hex(beenC)],["Stations",Math.round(been.size/allN*100)+"%"],["Lines visited",`${Ls.filter(L=>bs[L].b).length} / ${Ls.length}`],["Interchanges",`${xN.filter(n=>been.has(n)).length} / ${xN.length}`]],
+    ["BEEN TO","STATIONS","LEFT"],Ls.map(L=>[L,[`${bs[L].b}`,`${bs[L].t}`,`${bs[L].t-bs[L].b}`],bs[L].b/bs[L].t]),
+    "Interchange stations count once in the total but show under every line they serve.");
+  await mapPage("been","Been there map");
   const br=[];for(const [L,l] of Object.entries(LINES)){const ns=lineStops(L).map(c=>[c,nm(c)]).filter(([c,n])=>been.has(n));if(!ns.length)continue;br.push({h:`${l.name} · ${ns.length}`,c:l.color});ns.forEach(([c,n])=>br.push({t:`${c}  ${n}`}))}
   list("Stations been to",br);
+  // --- both ---
+  await mapPage("both","Both");
   const fn=`mrt-walker-${new Date().toISOString().slice(0,10)}.pdf`,dl=window.claude?.use?await window.claude.use("downloads"):null;
   if(!dl){d.save(fn);$("info").textContent="PDF saved.";return}
   try{await dl.save({filename:fn,data:d.output("blob")});$("info").textContent="PDF saved."}
