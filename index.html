@@ -28,7 +28,12 @@ svg.drag{cursor:grabbing}
 .dim .seg.hl{opacity:1}
 .stn{fill:#fff;stroke:#2b2b3a;cursor:pointer}
 .stn.x{fill:#fff;stroke:#1a1a2e}
+.stn.been{fill:#ffc53d;stroke:#1a1a2e}
 .stn.pick{fill:#00d4ff;stroke:#1a1a2e;stroke-width:4}
+#mode{position:absolute;left:12px;top:12px;z-index:1;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+#mode button{border:0;padding:6px 12px;border-radius:7px;background:none;font-size:13px;font-weight:600}
+#mode button.act{background:var(--acc);color:#0b1020}
+#mode button#mBeen.act{background:#ffc53d}
 .lbl{fill:#2b2b3a;font-family:var(--sans);font-weight:600;pointer-events:none;paint-order:stroke;stroke:#fbfcfd;stroke-linejoin:round}
 .lbl.x{font-weight:800;fill:#1a1a2e}
 #info{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(34,34,58,.94);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -59,7 +64,7 @@ body.clean header,body.clean aside,body.clean #info,body.clean .zb .z{display:no
 body.clean main{grid-template-columns:1fr;grid-template-rows:1fr}
 body.clean{height:100%}
 svg.only .seg.off,svg.only .hit,svg.only .stn,svg.only .lbl{display:none}
-svg.only.names .lbl.w,svg.only.names .stn.w{display:block}
+svg.only.names .lbl.w,svg.only.names .stn.w,svg.only.names .lbl.been,svg.only .stn.been{display:block}
 @media (prefers-reduced-motion:reduce){.seg{transition:none}}
 </style></head><body>
 
@@ -69,10 +74,12 @@ svg.only.names .lbl.w,svg.only.names .stn.w{display:block}
     <div class="stat"><small>Walked</small><span class="a" id="sKm">0.0 km</span></div>
     <div class="stat"><small>Segments</small><span id="sSeg">0/0</span></div>
     <div class="stat"><small>Network</small><span id="sPct">0%</span></div>
+    <div class="stat"><small>Been to</small><span id="sBeen" style="color:#ffc53d">0/0</span></div>
   </div>
 </header>
 <main>
   <div id="mapWrap">
+    <div id="mode" role="group" aria-label="Tap mode"><button id="mWalk" class="act">Walk</button><button id="mBeen">Been there</button></div>
     <svg id="map"><g id="vp"><rect id="land" x="120" y="330" width="1470" height="990" rx="60"></rect><g id="gSeg"></g><g id="gStn"></g><g id="gLbl"></g></g></svg>
     <div class="zb" style="z-index:1"><button id="zUi" aria-label="Hide or show controls" title="Hide/show controls">◐</button><button id="zGlow" aria-label="Show only walked lines" title="Walked lines only">✦</button><button id="zNames" aria-label="Show names of walked stations" title="Walked lines + names">Aa</button><button class="z" id="zIn" aria-label="Zoom in">+</button><button class="z" id="zOut" aria-label="Zoom out">−</button><button class="z" id="zFit" aria-label="Fit map">⤢</button></div>
     <div id="info">Tap a station, then another on the same line, to mark the walk between them. Do it again to undo.</div>
@@ -102,8 +109,9 @@ const POS=DATA.pos,px=c=>POS[ST[c][0]];
 const hav=(a,b)=>{const r=Math.PI/180,[,lo1,la1]=ST[a],[,lo2,la2]=ST[b],d=Math.sin((la2-la1)*r/2)**2+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin((lo2-lo1)*r/2)**2;return 12742*Math.asin(Math.sqrt(d))};
 const segs={}; // key -> {line,a,b,km,path,hit}
 for(const [L,l] of Object.entries(LINES))for(const run of l.runs)for(let i=1;i<run.length;i++){const a=run[i-1],b=run[i];segs[`${L}:${a}-${b}`]={L,a,b,km:hav(a,b)}}
-let walked=new Set();try{walked=new Set(JSON.parse(localStorage.getItem(KEY)||"[]").filter(k=>segs[k]))}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify([...walked]))}catch(e){}};
+let walked=new Set(),been=new Set();try{walked=new Set(JSON.parse(localStorage.getItem(KEY)||"[]").filter(k=>segs[k]));been=new Set(JSON.parse(localStorage.getItem(KEY+".been")||"[]"))}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify([...walked]));localStorage.setItem(KEY+".been",JSON.stringify([...been]))}catch(e){}};
+let mode="walk";
 const codeColor=c=>LINES[{CE:"CC",CG:"EW"}[c.replace(/\d+/,"")]||c.replace(/\d+/,"")].color;
 const pill=c=>`<span class="code" style="background:${codeColor(c)}">${c}</span>`;
 const nm=c=>ST[c][0];
@@ -134,6 +142,8 @@ function showStation(n,cs){
 const lineOf=c=>{const p=c.replace(/\d+/,"");return {CE:"CC",CG:"EW"}[p]||p};
 let pick=null;
 function pickStation(n,cs,dot){
+  if(mode==="been"){const on=!been.has(n);on?been.add(n):been.delete(n);save();render();
+    $("info").innerHTML=`${cs.map(pill).join("")} <b>${n}</b> · <b style="color:${on?"#ffc53d":"var(--mute)"}">${on?"been there":"removed"}</b>`;return}
   if(!pick||pick.n===n){pick?.dot.classList.remove("pick");pick=pick?.n===n?null:{n,cs,dot};if(pick){dot.classList.add("pick");showStation(n,cs);$("info").innerHTML+=` · <b style="color:var(--acc)">now tap another station on the same line</b>`}else $("info").textContent="Cancelled.";return}
   let best=null;
   for(const a of pick.cs)for(const b of cs)if(lineOf(a)===lineOf(b)){const ks=path(lineOf(a),a,b);if(ks.length&&(!best||ks.length<best.ks.length))best={a,b,ks}}
@@ -156,7 +166,8 @@ function render(){
     s.path.setAttribute("stroke-width",on?9:7);s.path.classList.toggle("hl",s.L===focusLine);
     per[s.L].n++;tot+=s.km;if(on){per[s.L].d++;per[s.L].km+=s.km;km+=s.km}}
   const wn=new Set();for(const k of walked)for(const c of [segs[k].a,segs[k].b])wn.add(nm(c));
-  for(const n in lblEl){lblEl[n].classList.toggle("w",wn.has(n));stnEl[n].classList.toggle("w",wn.has(n))}
+  for(const n in lblEl){lblEl[n].classList.toggle("w",wn.has(n));stnEl[n].classList.toggle("w",wn.has(n));lblEl[n].classList.toggle("been",been.has(n));stnEl[n].classList.toggle("been",been.has(n))}
+  $("sBeen").textContent=`${been.size}/${Object.keys(stnEl).length}`;
   const n=walked.size,all=Object.keys(segs).length;
   $("sKm").textContent=km.toFixed(1)+" km";$("sSeg").textContent=`${n}/${all}`;$("sPct").textContent=Math.round(km/tot*100)+"%";
   $("gSeg").classList.toggle("dim",!!focusLine);
@@ -164,7 +175,7 @@ function render(){
     <span class="code" style="background:${l.color}">${L}</span><span class="nm">${l.name}</span><span class="ct">${p.d}/${p.n} · ${p.km.toFixed(1)}km</span>
     <div class="bar"><i style="width:${p.d/p.n*100}%;background:${l.color}"></i></div></div>`}).join("");
   document.querySelectorAll(".ln").forEach(d=>{const f=()=>{focusLine=focusLine===d.dataset.l?null:d.dataset.l;render()};d.onclick=f;d.onkeydown=e=>{if(e.key==="Enter")f()}});
-  $("bk").value=btoa(JSON.stringify([...walked]));
+  $("bk").value=btoa(JSON.stringify({w:[...walked],b:[...been]}));
 }
 
 // route marking: ordered station list for a line (main run + branches appended)
@@ -182,8 +193,8 @@ $("rOn").onclick=()=>mark(true);$("rOff").onclick=()=>mark(false);
 
 // backup
 $("bCopy").onclick=()=>{const t=$("bk");navigator.clipboard?.writeText(t.value).then(()=>$("info").textContent="Backup code copied.",()=>{t.select();$("info").textContent="Code selected. Copy it with your keyboard."})};
-$("bLoad").onclick=()=>{try{const a=JSON.parse(atob($("bk").value.trim()));walked=new Set(a.filter(k=>segs[k]));save();render();$("info").textContent=`Loaded ${walked.size} walked stretches.`}catch(e){$("info").textContent="That code isn't valid. Paste the full code from Copy code."}};
-let resetArm=0;$("bReset").onclick=()=>{if(Date.now()-resetArm<3000){walked.clear();save();render();$("bReset").textContent="Reset all";$("info").textContent="All progress cleared."}else{resetArm=Date.now();$("bReset").textContent="Tap again to confirm";setTimeout(()=>$("bReset").textContent="Reset all",3000)}};
+$("bLoad").onclick=()=>{try{const a=JSON.parse(atob($("bk").value.trim())),w=Array.isArray(a)?a:a.w;walked=new Set(w.filter(k=>segs[k]));been=new Set((a.b||[]).filter(n=>stnEl[n]));save();render();$("info").textContent=`Loaded ${walked.size} walked stretches and ${been.size} stations.`}catch(e){$("info").textContent="That code isn't valid. Paste the full code from Copy code."}};
+let resetArm=0;$("bReset").onclick=()=>{if(Date.now()-resetArm<3000){walked.clear();been.clear();save();render();$("bReset").textContent="Reset all";$("info").textContent="All progress cleared."}else{resetArm=Date.now();$("bReset").textContent="Tap again to confirm";setTimeout(()=>$("bReset").textContent="Reset all",3000)}};
 
 // pan & zoom via viewBox
 const svg=$("map");let vb;
@@ -204,6 +215,9 @@ $("zUi").onclick=()=>{document.body.classList.toggle("clean");fit()};
 const glowUI=()=>{$("zGlow").style.borderColor=svg.classList.contains("only")&&!svg.classList.contains("names")?"var(--acc)":"";$("zNames").style.borderColor=svg.classList.contains("names")?"var(--acc)":""};
 $("zGlow").onclick=()=>{const on=!(svg.classList.contains("only")&&!svg.classList.contains("names"));svg.classList.toggle("only",on);svg.classList.remove("names");glowUI()};
 $("zNames").onclick=()=>{const on=!svg.classList.contains("names");svg.classList.toggle("names",on);svg.classList.toggle("only",on);glowUI()};
+const setMode=m=>{mode=m;$("mWalk").classList.toggle("act",m==="walk");$("mBeen").classList.toggle("act",m==="been");pick?.dot.classList.remove("pick");pick=null;
+  $("info").textContent=m==="been"?"Tap any station you've been to. Tap again to remove it.":"Tap a station, then another on the same line, to mark the walk between them."};
+$("mWalk").onclick=()=>setMode("walk");$("mBeen").onclick=()=>setMode("been");
 $("zIn").onclick=()=>zoom(1/1.4);$("zOut").onclick=()=>zoom(1.4);$("zFit").onclick=fit;
 addEventListener("resize",fit);
 render();fit();
