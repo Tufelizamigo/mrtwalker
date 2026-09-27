@@ -292,8 +292,10 @@ async function exportPDF(){
   list("Walked stretches",wr);
   const br=[];for(const [L,l] of Object.entries(LINES)){const ns=lineStops(L).map(c=>[c,nm(c)]).filter(([c,n])=>been.has(n));if(!ns.length)continue;br.push({h:`${l.name} · ${ns.length}`,c:l.color});ns.forEach(([c,n])=>br.push({t:`${c}  ${n}`}))}
   list("Stations been to",br);
-  d.save(`mrt-walker-${new Date().toISOString().slice(0,10)}.pdf`);
-  $("info").textContent="PDF saved. (Inside the Claude app downloads are blocked; use mrtwalker.xyz to download.)";
+  const fn=`mrt-walker-${new Date().toISOString().slice(0,10)}.pdf`,dl=window.claude?.use?await window.claude.use("downloads"):null;
+  if(!dl){d.save(fn);$("info").textContent="PDF saved.";return}
+  try{await dl.save({filename:fn,data:d.output("blob")});$("info").textContent="PDF saved."}
+  catch(e){$("info").textContent=e.code==="declined"?"Download cancelled.":"This view can't save files. Use mrtwalker.xyz to download the PDF."}
 }
 $("bPdf").onclick=()=>exportPDF().catch(e=>$("info").textContent="Couldn't build the PDF: "+e.message);
 
